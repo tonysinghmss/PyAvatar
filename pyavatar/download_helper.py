@@ -1,12 +1,17 @@
-import requests
+import os
 import re
+
+import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
-import os
 
 
 class Extractor:
     def distribution_links(self, *args, **kwargs):
+        raise NotImplementedError('abstract method')
+
+class BasicExtractor(Extractor):
+    def distribution_links(self, *args, **kwargs):   
         """Crawl the given pypi page url to get all the distribution links"""
         page = requests.get(args[0])
         if page.status_code == 200:
@@ -17,12 +22,7 @@ class Extractor:
         else:
             raise IOError('Could not fetch from url - {}'.format(args[0]))
 
-class BasicExtractor(Extractor):
-    def distribution_links(self, *args, **kwargs):   
-        # print(args)     
-        return super().distribution_links(*args, **kwargs)
-
-class Avatar:
+class Avatar(BasicExtractor):
     def download_dependency(self, depn_version, download_path):
         """Downloads the given dependency name into the given folder."""  
         # depn_version = 'attrs<=18.1.0'  
@@ -37,8 +37,8 @@ class Avatar:
         url = '/'.join(s.strip('/') for s in url_components)
         # print(url)
         # TODO: Further filters for setting platform type, python version and architecture in future
-        extractor = BasicExtractor()
-        distrib_links = extractor.distribution_links(url)
+        # extractor = BasicExtractor()
+        distrib_links = super().distribution_links(url)
         for k, url in distrib_links.items():
             # TODO: Log the name of the file being downloaded
             response = requests.get(url, stream=True)
@@ -59,13 +59,23 @@ class Avatar:
 
     def download(self, req_file_path, download_path):
         """Download each requirement from req_file_path and store it in download_path."""
-        with open(req_file_path, 'r') as rh:
-            content = rh.readlines()
-        content = [c.strip() for c in content]
-        # Clean the download path before downloading new files.
-        self._clean_folder(download_path)
-        for depn_version in content:
-            self.download_dependency(depn_version, download_path)
-
+        if os.path.exists(req_file_path):
+            with open(req_file_path, 'r') as rh:
+                content = rh.readlines()
+            content = [c.strip() for c in content]
+            try:
+                if not os.path.exists(download_path):
+                    os.makedirs(download_path)
+            except OSError as e:
+                print(getattr(e, 'message', str(e)))
+                print('Permission denied while creating {} folder structure.'.format(download_path))
+            else:
+                # Clean the download path before downloading new files.
+                self._clean_folder(download_path)
+                for depn_version in content:
+                    self.download_dependency(depn_version, download_path)
+        else:
+            print('{} file is not physically present. Please check!'.format(req_file_path))
+            
 if __name__ == "__main__":
     Avatar().download('E:\\PyWorkspace\\PyAvatar\\requirements.txt', 'E:\\PyWorkspace\\PyAvatar\\tdwn')            
